@@ -24,24 +24,33 @@ module CanvasConnect
   class MeetingFolderError < StandardError; end
   class MeetingNotFound < StandardError; end
 
-  # Public: Configure as a Canvas plugin.
-  #
-  # Returns nothing.
-  def self.register
-    Rails.configuration.to_prepare do
-      view_path = File.expand_path('../app/views', File.dirname(__FILE__))
-      unless ApplicationController.view_paths.include?(view_path)
-        ApplicationController.view_paths.unshift(view_path)
+  CONFIGURE = lambda {
+    view_path = File.expand_path('../app/views', File.dirname(__FILE__))
+    unless ApplicationController.view_paths.include?(view_path)
+      ApplicationController.view_paths.unshift(view_path)
+    end
+
+    ActiveSupport::Dependencies.autoload_paths << File.expand_path('../app/models', File.dirname(__FILE__))
+
+    require_dependency File.expand_path('../app/models/adobe_connect_conference.rb', File.dirname(__FILE__))
+    require_dependency "canvas/plugins/validators/adobe_connect_validator"
+    require_dependency "canvas/plugins/adobe_connect"
+    require_dependency "canvas_connect/meeting_archive"
+
+    Canvas::Plugins::AdobeConnect.new
+  }
+
+  if CANVAS_RAILS2
+    def self.register
+      Rails.configuration.to_prepare do
+        CONFIGURE.call
       end
-
-      ActiveSupport::Dependencies.autoload_paths << File.expand_path('../app/models', File.dirname(__FILE__))
-
-      require_dependency File.expand_path('../app/models/adobe_connect_conference.rb', File.dirname(__FILE__))
-      require_dependency "canvas/plugins/validators/adobe_connect_validator"
-      require_dependency "canvas/plugins/adobe_connect"
-      require_dependency "canvas_connect/meeting_archive"
-
-      Canvas::Plugins::AdobeConnect.new
+    end
+  else
+    class Railtie < Rails::Railtie
+      config.to_prepare do
+        CONFIGURE.call
+      end
     end
   end
 
@@ -77,4 +86,4 @@ module CanvasConnect
   end
 end
 
-CanvasConnect.register
+CanvasConnect.register if CANVAS_RAILS2
